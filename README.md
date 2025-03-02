@@ -1,6 +1,16 @@
 # Bitcoin Core Installer
 
-This repository contains scripts to automate the installation, configuration, and monitoring of a Bitcoin Core full node on Linux and Windows systems.
+This repository contains scripts to automate the installation, configuration, and monitoring of a Bitcoin Core full node on Linux, macOS, and Windows systems.
+
+## Repository Structure
+
+The repository is organized into three main directories:
+
+- `linux/` - Scripts for Linux systems
+- `mac/` - Scripts for macOS systems
+- `windows/` - Scripts for Windows systems
+
+Each directory contains the installation and status monitoring scripts specific to that operating system.
 
 ## Features
 
@@ -8,8 +18,8 @@ This repository contains scripts to automate the installation, configuration, an
 - Downloads and installs the latest version of Bitcoin Core
 - Verifies the download using cryptographic signatures
 - Sets up a proper configuration file
-- Creates a service for easy management (systemd on Linux, Windows Service on Windows)
-- Supports multiple architectures (x86_64, aarch64 on Linux; 32-bit and 64-bit on Windows)
+- Creates a service for easy management (systemd on Linux, LaunchAgent on macOS, Windows Service on Windows)
+- Supports multiple architectures (x86_64, aarch64/arm64 on Linux and macOS; 32-bit and 64-bit on Windows)
 - Includes status monitoring scripts
 
 ## Requirements
@@ -20,6 +30,12 @@ This repository contains scripts to automate the installation, configuration, an
 - At least 500GB of free disk space (for a full node)
 - A reliable internet connection
 
+### macOS
+- macOS 10.15 (Catalina) or later
+- Administrator privileges
+- At least 500GB of free disk space (for a full node)
+- A reliable internet connection
+
 ### Windows
 - Windows 7 or later (Windows 10/11 recommended)
 - Administrator privileges
@@ -27,22 +43,45 @@ This repository contains scripts to automate the installation, configuration, an
 - A reliable internet connection
 - PowerShell 5.0 or later
 
-## Installation
+## Quick Start
 
-1. Clone this repository:
+The repository includes launcher scripts that detect your operating system and guide you through the installation process:
+
+### For Linux and macOS users:
 
 ```bash
+# Clone the repository
 git clone https://github.com/yourusername/bitcoin-installer.git
 cd bitcoin-installer
+
+# Make the launcher script executable
+chmod +x install.sh
+
+# Run the launcher script
+./install.sh
 ```
 
-2. Choose the appropriate installation method for your operating system:
+### For Windows users:
+
+```powershell
+# Clone the repository
+git clone https://github.com/yourusername/bitcoin-installer.git
+cd bitcoin-installer
+
+# Run the PowerShell launcher script (as Administrator)
+.\install.ps1
+```
+
+## Manual Installation
+
+If you prefer to manually navigate to the appropriate directory for your operating system, follow these steps:
 
 ### Linux Installation
 
-1. Make the scripts executable:
+1. Navigate to the Linux directory and make the scripts executable:
 
 ```bash
+cd linux
 chmod +x install_bitcoin_core.sh check_node_status.sh
 ```
 
@@ -54,23 +93,46 @@ sudo ./install_bitcoin_core.sh
 
 3. Follow the prompts during installation.
 
+### macOS Installation
+
+1. Navigate to the macOS directory and make the scripts executable:
+
+```bash
+cd mac
+chmod +x install_bitcoin_core_mac.sh check_node_status_mac.sh
+```
+
+2. Run the installation script with sudo:
+
+```bash
+sudo ./install_bitcoin_core_mac.sh
+```
+
+3. Follow the prompts during installation.
+
 ### Windows Installation
 
-1. Open PowerShell as Administrator
+1. Navigate to the Windows directory:
 
-2. Enable script execution if not already enabled:
+```powershell
+cd windows
+```
+
+2. Open PowerShell as Administrator
+
+3. Enable script execution if not already enabled:
 
 ```powershell
 Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
 ```
 
-3. Run the installation script:
+4. Run the installation script:
 
 ```powershell
 .\install_bitcoin_core.ps1
 ```
 
-4. Follow the prompts during installation.
+5. Follow the prompts during installation.
 
 ## Configuration
 
@@ -81,6 +143,13 @@ Located at `~/.bitcoin/bitcoin.conf`. You can modify this file:
 
 ```bash
 nano ~/.bitcoin/bitcoin.conf
+```
+
+### macOS Configuration
+Located at `~/Library/Application Support/Bitcoin/bitcoin.conf`. You can modify this file:
+
+```bash
+nano ~/Library/Application\ Support/Bitcoin/bitcoin.conf
 ```
 
 ### Windows Configuration
@@ -128,6 +197,35 @@ After installation, you can manage your Bitcoin node using systemd:
   sudo systemctl enable bitcoind
   ```
 
+### macOS Management
+
+After installation, you can manage your Bitcoin node using launchctl:
+
+- Start the node:
+  ```bash
+  launchctl start org.bitcoin.bitcoind
+  ```
+
+- Stop the node:
+  ```bash
+  launchctl stop org.bitcoin.bitcoind
+  ```
+
+- Check if running:
+  ```bash
+  launchctl list | grep bitcoin
+  ```
+
+- View logs:
+  ```bash
+  tail -f ~/Library/Application\ Support/Bitcoin/debug.log
+  ```
+
+- Enable auto-start at login:
+  ```bash
+  launchctl load ~/Library/LaunchAgents/org.bitcoin.bitcoind.plist
+  ```
+
 ### Windows Management
 
 After installation, you can manage your Bitcoin node using Windows Services or PowerShell:
@@ -156,12 +254,21 @@ The repository includes status monitoring scripts that provide detailed informat
 ### Linux Monitoring
 
 ```bash
+cd linux
 ./check_node_status.sh
+```
+
+### macOS Monitoring
+
+```bash
+cd mac
+./check_node_status_mac.sh
 ```
 
 ### Windows Monitoring
 
 ```powershell
+cd windows
 .\check_node_status.ps1
 ```
 
@@ -177,7 +284,7 @@ These scripts display:
 
 Once your node is running, you can interact with it using the bitcoin-cli command:
 
-### Linux
+### Linux and macOS
 
 ```bash
 # Get blockchain information
@@ -203,7 +310,7 @@ The initial blockchain synchronization can take several days to complete dependi
 
 ## Security Considerations
 
-- The bitcoin.conf file has restricted permissions (600 on Linux)
+- The bitcoin.conf file has restricted permissions (600 on Linux and macOS)
 - The service includes basic hardening measures
 - Consider setting up a firewall to only allow connections on port 8333
 
@@ -230,7 +337,31 @@ If you encounter issues:
 
 4. Run the status check script for detailed information:
    ```bash
+   cd linux
    ./check_node_status.sh
+   ```
+
+### macOS Troubleshooting
+
+1. Check the logs:
+   ```bash
+   tail -f ~/Library/Application\ Support/Bitcoin/debug.log
+   ```
+
+2. Verify your configuration:
+   ```bash
+   bitcoin-cli -conf="$HOME/Library/Application Support/Bitcoin/bitcoin.conf" getnetworkinfo
+   ```
+
+3. Ensure you have enough disk space:
+   ```bash
+   df -h
+   ```
+
+4. Run the status check script for detailed information:
+   ```bash
+   cd mac
+   ./check_node_status_mac.sh
    ```
 
 ### Windows Troubleshooting
@@ -252,6 +383,7 @@ If you encounter issues:
 
 4. Run the status check script for detailed information:
    ```powershell
+   cd windows
    .\check_node_status.ps1
    ```
 
