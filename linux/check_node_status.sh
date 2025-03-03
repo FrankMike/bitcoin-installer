@@ -49,10 +49,76 @@ else
     exit 1
 fi
 
+# Get the home directory of the actual user
+if [ -n "$SUDO_USER" ]; then
+    ACTUAL_USER=$SUDO_USER
+    USER_HOME=$(eval echo ~$ACTUAL_USER)
+else
+    ACTUAL_USER=$(whoami)
+    USER_HOME=$(eval echo ~$ACTUAL_USER)
+fi
+
+# Check for bitcoin.conf and get RPC credentials
+BITCOIN_CONF="$USER_HOME/.bitcoin/bitcoin.conf"
+if [ -f "$BITCOIN_CONF" ]; then
+    print_info "Found Bitcoin configuration at $BITCOIN_CONF"
+    
+    # Extract RPC credentials
+    RPC_USER=$(grep -oP "(?<=rpcuser=).*" "$BITCOIN_CONF" 2>/dev/null)
+    RPC_PASSWORD=$(grep -oP "(?<=rpcpassword=).*" "$BITCOIN_CONF" 2>/dev/null)
+    
+    # Set environment variables for bitcoin-cli
+    if [ -n "$RPC_USER" ] && [ -n "$RPC_PASSWORD" ]; then
+        export BITCOIND_RPCUSER="$RPC_USER"
+        export BITCOIND_RPCPASSWORD="$RPC_PASSWORD"
+        print_info "RPC credentials found and set"
+        
+        # Create a temporary bitcoin.conf for bitcoin-cli
+        TEMP_CONF=$(mktemp)
+        cat > "$TEMP_CONF" << EOF
+rpcuser=$RPC_USER
+rpcpassword=$RPC_PASSWORD
+rpcconnect=127.0.0.1
+EOF
+        BITCOIN_CLI_OPTS="-conf=$TEMP_CONF"
+        print_info "Created temporary configuration for bitcoin-cli"
+    else
+        print_warning "RPC credentials not found in bitcoin.conf"
+        BITCOIN_CLI_OPTS=""
+    fi
+else
+    print_warning "Bitcoin configuration file not found at $BITCOIN_CONF"
+    BITCOIN_CLI_OPTS=""
+fi
+
+# Wait for RPC to be ready
+print_info "Waiting for Bitcoin Core RPC interface to be ready..."
+MAX_ATTEMPTS=30
+ATTEMPT=1
+
+while [ $ATTEMPT -le $MAX_ATTEMPTS ]; do
+    if bitcoin-cli $BITCOIN_CLI_OPTS getblockchaininfo &>/dev/null; then
+        print_info "RPC interface is ready"
+        break
+    else
+        echo -n "."
+        sleep 2
+        ATTEMPT=$((ATTEMPT + 1))
+    fi
+done
+
+if [ $ATTEMPT -gt $MAX_ATTEMPTS ]; then
+    print_error "Timed out waiting for RPC interface. Check your Bitcoin Core configuration."
+    print_info "You can try running this command manually to debug: bitcoin-cli getblockchaininfo"
+    print_info "If you're running as a different user, make sure you have the correct permissions."
+    exit 1
+fi
+
 # Get blockchain info
 print_header "Blockchain Information"
-if ! BLOCKCHAIN_INFO=$(bitcoin-cli getblockchaininfo 2>/dev/null); then
+if ! BLOCKCHAIN_INFO=$(bitcoin-cli $BITCOIN_CLI_OPTS getblockchaininfo 2>/dev/null); then
     print_error "Failed to get blockchain information. Check if the node is fully started."
+    print_info "Try running: bitcoin-cli -rpcwait getblockchaininfo"
     exit 1
 fi
 
@@ -87,7 +153,7 @@ fi
 
 # Get network info
 print_header "Network Information"
-if ! NETWORK_INFO=$(bitcoin-cli getnetworkinfo 2>/dev/null); then
+if ! NETWORK_INFO=$(bitcoin-cli $BITCOIN_CLI_OPTS getnetworkinfo 2>/dev/null); then
     print_error "Failed to get network information"
     exit 1
 fi
@@ -105,7 +171,7 @@ echo "Networks: $NETWORKS"
 
 # Get memory pool information
 print_header "Memory Pool Information"
-if ! MEMPOOL_INFO=$(bitcoin-cli getmempoolinfo 2>/dev/null); then
+if ! MEMPOOL_INFO=$(bitcoin-cli $BITCOIN_CLI_OPTS getmempoolinfo 2>/dev/null); then
     print_error "Failed to get mempool information"
     exit 1
 fi
@@ -120,7 +186,7 @@ echo "Mempool size: ${MEMPOOL_SIZE_MB} MB"
 
 # Get node uptime
 print_header "Node Uptime"
-UPTIME=$(bitcoin-cli uptime 2>/dev/null)
+UPTIME=$(bitcoin-cli $BITCOIN_CLI_OPTS uptime 2>/dev/null)
 if [ -n "$UPTIME" ]; then
     # Convert seconds to days, hours, minutes
     DAYS=$((UPTIME / 86400))
@@ -167,6 +233,11 @@ if [ "$CONNECTIONS" -lt 8 ]; then
     print_warning "You have few connections ($CONNECTIONS). Check your network configuration."
 else
     print_info "You have a healthy number of connections ($CONNECTIONS)."
+fi
+
+# Clean up the temporary file when done
+if [ -n "$TEMP_CONF" ] && [ -f "$TEMP_CONF" ]; then
+    rm -f "$TEMP_CONF"
 fi
 
 echo ""
