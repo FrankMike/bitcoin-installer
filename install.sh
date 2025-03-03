@@ -22,6 +22,20 @@ print_error() {
     echo -e "${RED}[-] $1${NC}"
 }
 
+# Check if script is run with sudo/admin privileges
+check_privileges() {
+    if [[ "$OS" == "windows" ]]; then
+        # For Windows, we'll just warn the user
+        print_warning "Make sure you're running this script with administrator privileges"
+    else
+        # For Linux and macOS
+        if [ "$EUID" -ne 0 ]; then
+            print_error "This script must be run with sudo or as root"
+            exit 1
+        fi
+    fi
+}
+
 # Detect operating system
 detect_os() {
     if [[ "$OSTYPE" == "linux-gnu"* ]]; then
@@ -43,28 +57,30 @@ detect_os() {
 main() {
     print_message "Bitcoin Core Installer Launcher"
     detect_os
+    check_privileges
 
     case $OS in
         linux)
             print_message "Launching Linux installer..."
             cd linux
             chmod +x install_bitcoin_core.sh
-            echo "To install Bitcoin Core, run: sudo ./install_bitcoin_core.sh"
+            ./install_bitcoin_core.sh
             ;;
         mac)
             print_message "Launching macOS installer..."
             cd mac
             chmod +x install_bitcoin_core_mac.sh
-            echo "To install Bitcoin Core, run: sudo ./install_bitcoin_core_mac.sh"
+            ./install_bitcoin_core_mac.sh
             ;;
         windows)
-            print_message "For Windows installation:"
-            echo "1. Open PowerShell as Administrator"
-            echo "2. Navigate to the windows directory: cd windows"
-            echo "3. Run: Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser"
-            echo "4. Run: ./install_bitcoin_core.ps1"
+            print_message "Launching Windows installer..."
+            cd windows
+            # Set execution policy temporarily for this process
+            powershell -Command "Set-ExecutionPolicy -ExecutionPolicy Bypass -Scope Process; & './install_bitcoin_core.ps1'"
             ;;
     esac
+    
+    print_message "Installation process completed!"
 }
 
 # Run the main function
