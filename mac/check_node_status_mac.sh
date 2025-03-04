@@ -78,7 +78,7 @@ echo "Blockchain Size: ${SIZE_ON_DISK_GB} GB"
 echo "Pruned: $PRUNED"
 
 # Check if fully synced
-if [ "$BLOCKS" -eq "$HEADERS" ] && [ "$SYNC_PERCENTAGE" = "100.00" ]; then
+if [ "$BLOCKS" -eq "$HEADERS" ] && (( $(echo "$SYNC_PERCENTAGE > 99.99" | bc -l) )); then
     print_info "Node is fully synced!"
 else
     BLOCKS_REMAINING=$((HEADERS - BLOCKS))
