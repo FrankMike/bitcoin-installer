@@ -162,7 +162,7 @@ CPU_LOAD=$(sysctl -n vm.loadavg | awk '{print $2, $3, $4}')
 echo "CPU load (1, 5, 15 min): $CPU_LOAD"
 
 print_header "Summary"
-if [ "$BLOCKS" -eq "$HEADERS" ] && [ "$SYNC_PERCENTAGE" = "100.00" ]; then
+if [ "$BLOCKS" -eq "$HEADERS" ] && (( $(echo "$SYNC_PERCENTAGE > 99.99" | bc -l) )); then
     print_info "Your Bitcoin node is fully synced and operational!"
 else
     print_warning "Your Bitcoin node is still syncing. Please be patient."
