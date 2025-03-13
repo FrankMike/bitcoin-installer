@@ -90,7 +90,7 @@ install_dependencies() {
             ;;
     esac
     
-    # Verify dependencies were installed
+    # Verify dependencies
     for cmd in wget gpg curl; do
         if ! command -v $cmd &> /dev/null; then
             print_error "Required dependency '$cmd' is not installed"
@@ -101,7 +101,7 @@ install_dependencies() {
     print_message "Dependencies installed successfully"
 }
 
-# Function to download and install Bitcoin SV2 Template Provider
+# Download and install Bitcoin SV2 Template Provider
 download_sv2_bitcoin() {
     local version="0.1.14"
     local arch="x86_64"
