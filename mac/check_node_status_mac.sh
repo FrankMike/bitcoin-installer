@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # Bitcoin Node Status Checker for macOS
 # This script provides a simple way to check the status of your Bitcoin node on macOS
@@ -9,7 +11,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0;0m' # No Color
 
 # Node type variables
 BITCOIN_CORE_INSTALLED=false
@@ -35,6 +37,18 @@ print_warning() {
 print_error() {
     echo -e "${RED}$1${NC}"
 }
+
+print_usage() {
+    echo "Usage: $(basename \"$0\") [-h|--help]"
+    echo "  -h, --help    show this help message"
+}
+
+while [[ $# -gt 0 ]]; then
+    case "$1" in
+        -h|--help) print_usage; exit 0;;
+        *) print_error "Unknown option: $1"; print_usage; exit 1;;
+    esac
+done
 
 # Get the home directory of the current user
 USER_HOME=$(eval echo ~$USER)
@@ -120,6 +134,7 @@ setup_rpc_connection() {
             
             # Create a temporary bitcoin.conf for bitcoin-cli
             TEMP_CONF=$(mktemp)
+            trap 'rm -f "$TEMP_CONF"' EXIT
             cat > "$TEMP_CONF" << EOF
 rpcuser=$RPC_USER
 rpcpassword=$RPC_PASSWORD
@@ -403,14 +418,9 @@ main() {
     # Print summary
     print_summary
     
-    # Clean up the temporary file when done
-    if [ -n "$TEMP_CONF" ] && [ -f "$TEMP_CONF" ]; then
-        rm -f "$TEMP_CONF"
-    fi
-
     echo ""
     echo "For more detailed information, use: bitcoin-cli help"
 }
 
 # Run the main function
-main 
+main

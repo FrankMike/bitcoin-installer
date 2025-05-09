@@ -1,10 +1,10 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # Bitcoin Core Installation and Node Setup Script for macOS
 # This script automates the installation of Bitcoin Core and sets up a full node
 # Supports both standard Bitcoin Core and SV2 Template Provider
-
-set -e  # Exit immediately if a command exits with a non-zero status
 
 # Color codes for better readability
 RED='\033[0;31m'
@@ -16,7 +16,6 @@ NC='\033[0m' # No Color
 # Node type selection
 NODE_TYPE="standard"
 
-# Function to display messages
 print_message() {
     echo -e "${GREEN}[+] $1${NC}"
 }
@@ -32,6 +31,24 @@ print_error() {
 print_header() {
     echo -e "${BLUE}=== $1 ===${NC}"
 }
+
+print_usage() {
+    echo "Usage: $(basename \"$0\") [-h|--help] [-y|--yes] [--node-type standard|sv2]"
+}
+
+FORCE=false
+NODE_TYPE_OVERRIDE=""
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -h|--help) print_usage; exit 0;;
+        -y|--yes) FORCE=true; shift;;
+        --node-type) NODE_TYPE_OVERRIDE="$2"; shift 2;;
+        *) print_error "Unknown option: $1"; print_usage; exit 1;;
+    esac
+done
+if [[ -n "$NODE_TYPE_OVERRIDE" ]]; then
+    NODE_TYPE="$NODE_TYPE_OVERRIDE"
+fi
 
 # Check if script is run with sudo
 if [ "$EUID" -ne 0 ]; then
@@ -114,7 +131,7 @@ get_latest_version() {
         print_warning "Failed to get version from website, trying alternative method..."
         # Fallback to GitHub API
         LATEST_VERSION=$(curl -sL --connect-timeout 10 https://api.github.com/repos/bitcoin/bitcoin/releases/latest | grep -o '"tag_name": "v[^"]*"' | cut -d'"' -f4 | tr -d 'v')
-    }
+    fi
     
     if [ -z "$LATEST_VERSION" ]; then
         print_error "Failed to determine the latest Bitcoin Core version"
@@ -148,7 +165,8 @@ download_bitcoin_core() {
     
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR"
+    trap 'popd >/dev/null; rm -rf "$TEMP_DIR"' EXIT
+    pushd "$TEMP_DIR" >/dev/null
     
     # Download Bitcoin Core binary
     BITCOIN_FILE="bitcoin-$version-$arch-apple-darwin.tar.gz"
@@ -172,49 +190,9 @@ download_bitcoin_core() {
     
     # Import Bitcoin Core release signing keys
     print_message "Importing Bitcoin Core release signing keys..."
-    
-    # Define an array of Bitcoin Core release signing keys
-    BITCOIN_KEYS=(
-        "01EA5486DE18A882D4C2684590C8019E36C2E964"
-        "152812300785C96444D3334D17565732E08E5E41" # Andrew Chow
-        "E61773CD6E01040E2F1BD78CE7E2984B6289C93A" # Michael Folkson
-        "9DEAE0DC7063249FB05474681E4AED62986CD25D" # Wladimir J. van der Laan
-        "C388F6961FB972A95678E327F62711DBDCA8AE56" # Kvaciral
-        "9D3CC86A72F8494342EA5FD10A41BDC3F4FAFF1C" # Aaron Clauson
-        "637DB1E23370F84AFF88CCE03152347D07DA627C" # Hennadii Stepanov
-        "F2CFC4ABD0B99D837EEBB7D09B79B45691DB4173" # Sebastian Kung
-        "E86AE73439625BBEE306AAE6B66D427F873CB1A3" # Max Edwards
-        "F19F5FF2B0589EC341220045BA03F4DBE0C63FB4" # Antoine Poinsot
-        "F4FC70F07310028424EFC20A8E4256593F177720" # Christian Gugger
-        "A0083660F235A27000CD3C81CE6EC49945C17EA6" # Jon Atack
-        "0CCBAAFD76A2ECE2CCD3141DE2FFD5B1D88CA97D" # Marco Falke
-        "101598DC823C1B5F9A6624ABA5E0907A0380E6C3" # Pieter Wuille
-    )
-
-    # Try multiple keyservers
-    KEYSERVERS=("hkps://keys.openpgp.org" "hkps://keyserver.ubuntu.com" "hkps://pgp.mit.edu")
-
-    # Import keys from keyservers
-    KEY_IMPORT_SUCCESS=false
-    for key in "${BITCOIN_KEYS[@]}"; do
-        for server in "${KEYSERVERS[@]}"; do
-            if gpg --keyserver "$server" --recv-keys "$key" 2>/dev/null; then
-                print_message "Successfully imported key $key"
-                KEY_IMPORT_SUCCESS=true
-                break
-            fi
-        done
-    done
-
-    if [ "$KEY_IMPORT_SUCCESS" = false ]; then
-        print_warning "Could not import keys from keyservers, trying direct download..."
-        # Try downloading keys directly from Bitcoin Core website
-        curl -sL https://bitcoincore.org/keys/keys.asc | gpg --import
-        if [ $? -ne 0 ]; then
-            print_error "Failed to import Bitcoin Core release signing keys"
-            exit 1
-        fi
-    }
+    if ! gpg --import <(curl -sL https://bitcoincore.org/keys/keys.asc); then
+        print_error "Failed to import release signing keys"; exit 1
+    fi
     
     # Verify the signature
     print_message "Verifying signature..."
@@ -241,10 +219,7 @@ download_bitcoin_core() {
     mkdir -p /usr/local/bin
     cp -r "bitcoin-$version/bin/"* /usr/local/bin/
     
-    # Clean up
-    cd - > /dev/null
-    rm -rf "$TEMP_DIR"
-    
+    # Temporary directory cleaned on exit via trap
     print_message "Bitcoin Core $version has been installed successfully!"
 }
 
@@ -271,7 +246,8 @@ download_sv2_bitcoin() {
     
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR"
+    trap 'popd >/dev/null; rm -rf "$TEMP_DIR"' EXIT
+    pushd "$TEMP_DIR" >/dev/null
     
     # Download Bitcoin SV2 binary
     BITCOIN_FILE="bitcoin-sv2-tp-$version-$arch-apple-darwin.tar.gz"
@@ -304,10 +280,7 @@ download_sv2_bitcoin() {
         find "$EXTRACT_DIR" -type f -executable -exec cp {} /usr/local/bin/ \;
     fi
     
-    # Clean up
-    cd - > /dev/null
-    rm -rf "$TEMP_DIR"
-    
+    # Temporary directory cleaned on exit via trap
     print_message "Bitcoin SV2 Template Provider v$version has been installed successfully!"
 }
 
@@ -638,4 +611,4 @@ main() {
 }
 
 # Run the main function
-main 
+main
