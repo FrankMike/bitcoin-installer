@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # Bitcoin Node Status Checker
 # This script provides a simple way to check the status of your Bitcoin node
@@ -9,7 +11,7 @@ RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0;0m' # No Color
 
 # Function to display messages
 print_header() {
@@ -27,6 +29,11 @@ print_warning() {
 print_error() {
     echo -e "${RED}$1${NC}"
 }
+
+# Check for jq
+if ! command -v jq &> /dev/null; then
+    print_warning "jq not installed; JSON parsing will use grep/awk"
+fi
 
 # Detect node type
 detect_node_type() {
@@ -118,6 +125,7 @@ setup_rpc_connection() {
             
             # Create a temporary bitcoin.conf for bitcoin-cli
             TEMP_CONF=$(mktemp)
+            trap 'rm -f "$TEMP_CONF"' EXIT
             cat > "$TEMP_CONF" << EOF
 rpcuser=$RPC_USER
 rpcpassword=$RPC_PASSWORD
@@ -413,4 +421,4 @@ main() {
 }
 
 # Run the main function
-main 
+main

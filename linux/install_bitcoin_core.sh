@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # Bitcoin Core Installation and Node Setup Script
 # This script automates the installation of Bitcoin Core and sets up a full node
-
-set -e  # Exit immediately if a command exits with a non-zero status
 
 # Color codes for better readability
 RED='\033[0;31m'
@@ -147,7 +147,8 @@ download_bitcoin_core() {
     
     # Create temporary directory
     TEMP_DIR=$(mktemp -d)
-    cd "$TEMP_DIR"
+    trap 'popd >/dev/null; rm -rf "$TEMP_DIR"' EXIT
+    pushd "$TEMP_DIR" >/dev/null
     
     # Download Bitcoin Core binary
     BITCOIN_FILE="bitcoin-$version-$arch-linux-gnu.tar.gz"
@@ -241,10 +242,7 @@ download_bitcoin_core() {
     print_message "Installing Bitcoin Core..."
     cp -r "bitcoin-$version/bin/"* /usr/local/bin/
     
-    # Clean up
-    cd - > /dev/null
-    rm -rf "$TEMP_DIR"
-    
+    # Temporary directory cleaned on exit via trap
     print_message "Bitcoin Core $version has been installed successfully!"
 }
 
@@ -407,4 +405,4 @@ main() {
 }
 
 # Run the main function
-main 
+main

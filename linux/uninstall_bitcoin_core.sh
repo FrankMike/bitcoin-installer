@@ -1,9 +1,9 @@
-#!/bin/bash
+#!/usr/bin/env bash
+set -euo pipefail
+IFS=$'\n\t'
 
 # Bitcoin Core Uninstallation Script
 # This script stops Bitcoin Core service and uninstalls the software
-
-set -e  # Exit immediately if a command exits with a non-zero status
 
 # Color codes for better readability
 RED='\033[0;31m'
@@ -47,24 +47,31 @@ print_message "Starting Bitcoin Core uninstallation process..."
 stop_bitcoin_service() {
     print_message "Stopping Bitcoin Core service..."
     
-    if systemctl is-active --quiet bitcoind; then
-        systemctl stop bitcoind
-        print_message "Bitcoin Core service stopped"
+    if command -v systemctl &> /dev/null; then
+        if systemctl is-active --quiet bitcoind; then
+            systemctl stop bitcoind
+            print_message "Bitcoin Core service stopped"
+        else
+            print_warning "Bitcoin Core service is not running"
+        fi
+        if systemctl is-enabled --quiet bitcoind; then
+            systemctl disable bitcoind
+            print_message "Bitcoin Core service disabled"
+        fi
+    elif command -v service &> /dev/null; then
+        service bitcoind stop && print_message "Init service bitcoind stopped" || print_warning "Failed to stop init service"
     else
-        print_warning "Bitcoin Core service is not running"
+        print_warning "No service manager detected; please stop bitcoind manually"
     fi
-    
-    # Disable the service
-    if systemctl is-enabled --quiet bitcoind 2>/dev/null; then
-        systemctl disable bitcoind
-        print_message "Bitcoin Core service disabled"
-    fi
-    
-    # Remove systemd service file
+    # Clean up service scripts
     if [ -f "/etc/systemd/system/bitcoind.service" ]; then
-        rm -f /etc/systemd/system/bitcoind.service
+        rm -f "/etc/systemd/system/bitcoind.service"
         systemctl daemon-reload
-        print_message "Bitcoin Core systemd service file removed"
+        print_message "Systemd service file removed"
+    fi
+    if [ -f "/etc/init.d/bitcoind" ]; then
+        rm -f "/etc/init.d/bitcoind"
+        print_message "Init.d script removed"
     fi
 }
 
@@ -105,15 +112,32 @@ remove_blockchain_data() {
     fi
 }
 
+# Usage/help and flags
+print_usage() {
+    echo "Usage: $(basename "$0") [--yes|-y] [--help|-h]"
+    echo "  -y, --yes    skip interactive confirmations"
+    echo "  -h, --help   display this help and exit"
+}
+FORCE=false
+while [[ $# -gt 0 ]]; do
+    case "$1" in
+        -y|--yes) FORCE=true; shift;;
+        -h|--help) print_usage; exit 0;;
+        *) print_error "Unknown option: $1"; print_usage; exit 1;;
+    esac
+done
+
 # Main execution
 main() {
     # Display warning and confirmation
     print_warning "This script will uninstall Bitcoin Core and optionally remove all blockchain data."
-    read -p "Do you want to continue with uninstallation? (yes/no): " CONTINUE
-    
-    if [[ "$CONTINUE" != "yes" ]]; then
-        print_message "Uninstallation cancelled"
-        exit 0
+    if ! $FORCE; then
+        read -r -p "Continue with uninstallation? (yes/no): " CONTINUE
+        CONTINUE=${CONTINUE,,}
+        case "$CONTINUE" in
+            y|yes) ;; 
+            *) print_message "Uninstallation cancelled"; exit 0;;
+        esac
     fi
     
     # Stop Bitcoin Core service
@@ -123,13 +147,16 @@ main() {
     uninstall_bitcoin_binaries
     
     # Ask about removing blockchain data
-    read -p "Do you want to remove all blockchain data and configuration? (yes/no): " REMOVE_DATA
-    
-    if [[ "$REMOVE_DATA" == "yes" ]]; then
-        remove_blockchain_data
+    if $FORCE; then
+        REMOVE_DATA=true
     else
-        print_message "Keeping Bitcoin Core data directory"
+        read -r -p "Remove all blockchain data and config? (yes/no): " REMOVE_DATA
+        REMOVE_DATA=${REMOVE_DATA,,}
     fi
+    case "$REMOVE_DATA" in
+        y|yes) remove_blockchain_data;;
+        *) print_message "Keeping Bitcoin Core data directory";;
+    esac
     
     print_message "Bitcoin Core uninstallation completed!"
     
@@ -141,4 +168,4 @@ main() {
 }
 
 # Run the main function
-main 
+main
